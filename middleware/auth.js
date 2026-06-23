@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken')
-const JWT_SECRET = 'change-this-in-production'
+const JWT_SECRET = process.env.JWT_SECRET
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization
