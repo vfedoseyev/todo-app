@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Todo App</title>
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 0 20px; }
+    input { width: 100%; padding: 8px; font-size: 16px; box-sizing: border-box; margin-bottom: 8px; }
+    button { padding: 8px 16px; font-size: 16px; cursor: pointer; }
+    ul { list-style: none; padding: 0; margin-top: 20px; }
+    li { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid #eee; }
+    li.done span { text-decoration: line-through; color: #aaa; }
+    li span { flex: 1; }
+    #auth, #app { display: none; }
+    .row { display: flex; gap: 8px; }
+    #error { color: red; font-size: 14px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+  <div id="auth">
+    <h1>Вход</h1>
+    <input id="email" type="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Пароль">
+    <div id="error"></div>
+    <div class="row">
+      <button id="loginBtn">Войти</button>
+      <button id="registerBtn">Зарегистрироваться</button>
+    </div>
+  </div>
+
+  <div id="app">
+    <div style="display:flex; justify-content:space-between; align-items:center">
+      <h1>Мои задачи</h1>
+      <button id="logoutBtn">Выйти</button>
+    </div>
+    <div class="row">
+      <input id="todoInput" type="text" placeholder="Новая задача...">
+      <button id="addBtn">Добавить</button>
+    </div>
+    <ul id="list"></ul>
+  </div>
+
+  <script>
+    function getToken() {
+      return localStorage.getItem('token')
+    }
+
+    function authFetch(url, options = {}) {
+      return fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
+          ...options.headers,
+        }
+      })
+    }
+
+    function showAuth() {
+      document.getElementById('auth').style.display = 'block'
+      document.getElementById('app').style.display = 'none'
+    }
+
+    function showApp() {
+      document.getElementById('auth').style.display = 'none'
+      document.getElementById('app').style.display = 'block'
+      loadTodos()
+    }
+
+    async function loadTodos() {
+      const res = await authFetch('/api/todos')
+      const todos = await res.json()
+
+      const list = document.getElementById('list')
+      list.innerHTML = ''
+
+      todos.forEach(todo => {
+        const li = document.createElement('li')
+        if (todo.done) li.classList.add('done')
+
+        const span = document.createElement('span')
+        span.textContent = todo.text
+
+        const doneBtn = document.createElement('button')
+        doneBtn.textContent = todo.done ? 'Отменить' : 'Готово'
+        doneBtn.onclick = async () => {
+          await authFetch(`/api/todos/${todo.id}`, { method: 'PATCH' })
+          loadTodos()
+        }
+
+        const deleteBtn = document.createElement('button')
+        deleteBtn.textContent = 'Удалить'
+        deleteBtn.onclick = async () => {
+          await authFetch(`/api/todos/${todo.id}`, { method: 'DELETE' })
+          loadTodos()
+        }
+
+        li.append(span, doneBtn, deleteBtn)
+        list.appendChild(li)
+      })
+    }
+
+    document.getElementById('addBtn').addEventListener('click', async () => {
+      const input = document.getElementById('todoInput')
+      const text = input.value.trim()
+      if (!text) return
+
+      await authFetch('/api/todos', {
+        method: 'POST',
+        body: JSON.stringify({ text })
+      })
+      input.value = ''
+      loadTodos()
+    })
+
+    async function authRequest(url) {
+      const email = document.getElementById('email').value
+      const password = document.getElementById('password').value
+      const errorEl = document.getElementById('error')
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        errorEl.textContent = data.error
+        return
+      }
+
+      localStorage.setItem('token', data.token)
+      showApp()
+    }
+
+    document.getElementById('loginBtn').onclick = () => authRequest('/api/login')
+    document.getElementById('registerBtn').onclick = () => authRequest('/api/register')
+
+    document.getElementById('logoutBtn').onclick = () => {
+      localStorage.removeItem('token')
+      showAuth()
+    }
+
+    if (getToken()) {
+      showApp()
+    } else {
+      showAuth()
+    }
+  </script>
+</body>
+</html>
